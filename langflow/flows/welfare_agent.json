@@ -1,0 +1,228 @@
+{
+  "id": "welfare-agent-flow",
+  "name": "Welfare Eligibility Agent",
+  "description": "Determines which government welfare schemes a migrant worker is eligible for based on their profile using IBM Granite via Watsonx.ai and MongoDB Atlas Vector Search.",
+  "data": {
+    "nodes": [
+      {
+        "id": "node-input-worker-profile",
+        "type": "TextInput",
+        "position": { "x": 80, "y": 200 },
+        "data": {
+          "label": "Worker Profile Input",
+          "description": "JSON string representing the worker's profile (name, age, occupation, income, state, documents held, etc.)",
+          "inputs": {},
+          "outputs": {
+            "text": {
+              "type": "str",
+              "description": "Worker profile JSON string"
+            }
+          },
+          "template": {
+            "input_value": {
+              "field_type": "str",
+              "display_name": "Worker Profile JSON",
+              "multiline": true,
+              "required": true,
+              "placeholder": "{\"name\": \"Ramesh Kumar\", \"age\": 32, \"occupation\": \"construction\", \"monthly_income\": 8000, \"state\": \"Maharashtra\"}"
+            }
+          }
+        }
+      },
+      {
+        "id": "node-retriever-welfare",
+        "type": "VectorStoreRetriever",
+        "position": { "x": 80, "y": 420 },
+        "data": {
+          "label": "Welfare Schemes Retriever",
+          "description": "Retrieves relevant welfare scheme documents from MongoDB Atlas Vector Search",
+          "inputs": {
+            "query": {
+              "type": "str",
+              "description": "Search query derived from worker profile"
+            }
+          },
+          "outputs": {
+            "documents": {
+              "type": "list",
+              "description": "Relevant welfare scheme documents"
+            }
+          },
+          "template": {
+            "collection_name": {
+              "field_type": "str",
+              "display_name": "MongoDB Collection",
+              "value": "welfare_schemes",
+              "required": true
+            },
+            "connection_string": {
+              "field_type": "str",
+              "display_name": "MongoDB Atlas URI",
+              "value": "${MONGODB_URI}",
+              "required": true,
+              "password": true
+            },
+            "embedding_model": {
+              "field_type": "str",
+              "display_name": "Embedding Model",
+              "value": "ibm/slate-125m-english-rtrvr"
+            },
+            "index_name": {
+              "field_type": "str",
+              "display_name": "Vector Index Name",
+              "value": "welfare_vector_index"
+            },
+            "top_k": {
+              "field_type": "int",
+              "display_name": "Top K Results",
+              "value": 5
+            }
+          }
+        }
+      },
+      {
+        "id": "node-prompt-welfare",
+        "type": "PromptTemplate",
+        "position": { "x": 440, "y": 300 },
+        "data": {
+          "label": "Welfare Eligibility Prompt",
+          "description": "Formats the prompt for the Granite LLM combining worker profile and retrieved scheme documents",
+          "inputs": {
+            "worker_profile": {
+              "type": "str",
+              "description": "Worker profile JSON from input node"
+            },
+            "context": {
+              "type": "str",
+              "description": "Retrieved welfare scheme documents"
+            }
+          },
+          "outputs": {
+            "prompt": {
+              "type": "str",
+              "description": "Formatted prompt string"
+            }
+          },
+          "template": {
+            "template": {
+              "field_type": "str",
+              "display_name": "Prompt Template",
+              "multiline": true,
+              "value": "You are a welfare eligibility assistant. Given this worker profile: {worker_profile} and these relevant welfare scheme documents: {context}, determine which schemes the worker is eligible for. For each scheme, state: eligible/potentially_eligible/not_eligible and explain why. List required documents."
+            }
+          }
+        }
+      },
+      {
+        "id": "node-llm-granite",
+        "type": "CustomComponent",
+        "position": { "x": 800, "y": 300 },
+        "data": {
+          "label": "IBM Granite LLM (Watsonx.ai)",
+          "description": "IBM Granite 13B Chat via Watsonx.ai for welfare eligibility determination",
+          "inputs": {
+            "prompt": {
+              "type": "str",
+              "description": "Formatted prompt from PromptTemplate"
+            }
+          },
+          "outputs": {
+            "text": {
+              "type": "str",
+              "description": "LLM response with eligibility determination"
+            }
+          },
+          "template": {
+            "model_id": {
+              "field_type": "str",
+              "display_name": "Model ID",
+              "value": "ibm/granite-13b-chat-v2",
+              "required": true
+            },
+            "watsonx_api_key": {
+              "field_type": "str",
+              "display_name": "Watsonx API Key",
+              "value": "${WATSONX_API_KEY}",
+              "required": true,
+              "password": true
+            },
+            "watsonx_project_id": {
+              "field_type": "str",
+              "display_name": "Watsonx Project ID",
+              "value": "${WATSONX_PROJECT_ID}",
+              "required": true
+            },
+            "watsonx_url": {
+              "field_type": "str",
+              "display_name": "Watsonx URL",
+              "value": "${WATSONX_URL}"
+            },
+            "max_new_tokens": {
+              "field_type": "int",
+              "display_name": "Max New Tokens",
+              "value": 1024
+            },
+            "temperature": {
+              "field_type": "float",
+              "display_name": "Temperature",
+              "value": 0.2
+            }
+          }
+        }
+      },
+      {
+        "id": "node-output-welfare",
+        "type": "TextOutput",
+        "position": { "x": 1160, "y": 300 },
+        "data": {
+          "label": "Eligibility Result Output",
+          "description": "Returns the welfare eligibility analysis as text",
+          "inputs": {
+            "text": {
+              "type": "str",
+              "description": "Eligibility determination from LLM"
+            }
+          },
+          "outputs": {}
+        }
+      }
+    ],
+    "edges": [
+      {
+        "id": "edge-input-to-prompt",
+        "source": "node-input-worker-profile",
+        "sourceHandle": "text",
+        "target": "node-prompt-welfare",
+        "targetHandle": "worker_profile"
+      },
+      {
+        "id": "edge-input-to-retriever",
+        "source": "node-input-worker-profile",
+        "sourceHandle": "text",
+        "target": "node-retriever-welfare",
+        "targetHandle": "query"
+      },
+      {
+        "id": "edge-retriever-to-prompt",
+        "source": "node-retriever-welfare",
+        "sourceHandle": "documents",
+        "target": "node-prompt-welfare",
+        "targetHandle": "context"
+      },
+      {
+        "id": "edge-prompt-to-llm",
+        "source": "node-prompt-welfare",
+        "sourceHandle": "prompt",
+        "target": "node-llm-granite",
+        "targetHandle": "prompt"
+      },
+      {
+        "id": "edge-llm-to-output",
+        "source": "node-llm-granite",
+        "sourceHandle": "text",
+        "target": "node-output-welfare",
+        "targetHandle": "text"
+      }
+    ]
+  }
+}

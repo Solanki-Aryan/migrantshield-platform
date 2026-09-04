@@ -1,0 +1,228 @@
+{
+  "id": "wage-agent-flow",
+  "name": "Wage Fairness Agent",
+  "description": "Analyzes a migrant worker's wage against applicable minimum wage regulations retrieved from MongoDB Atlas Vector Search, using IBM Granite via Watsonx.ai.",
+  "data": {
+    "nodes": [
+      {
+        "id": "node-input-wage-data",
+        "type": "TextInput",
+        "position": { "x": 80, "y": 200 },
+        "data": {
+          "label": "Worker Wage Data Input",
+          "description": "JSON string with worker wage details: occupation, state, current wage, hours worked, employer sector",
+          "inputs": {},
+          "outputs": {
+            "text": {
+              "type": "str",
+              "description": "Worker wage data JSON string"
+            }
+          },
+          "template": {
+            "input_value": {
+              "field_type": "str",
+              "display_name": "Worker Wage Data JSON",
+              "multiline": true,
+              "required": true,
+              "placeholder": "{\"occupation\": \"construction\", \"state\": \"Maharashtra\", \"current_daily_wage\": 350, \"hours_per_day\": 10, \"employer_sector\": \"building_construction\"}"
+            }
+          }
+        }
+      },
+      {
+        "id": "node-retriever-wage",
+        "type": "VectorStoreRetriever",
+        "position": { "x": 80, "y": 420 },
+        "data": {
+          "label": "Minimum Wage Notifications Retriever",
+          "description": "Retrieves applicable minimum wage notifications and regulations from MongoDB Atlas Vector Search",
+          "inputs": {
+            "query": {
+              "type": "str",
+              "description": "Search query derived from worker wage data"
+            }
+          },
+          "outputs": {
+            "documents": {
+              "type": "list",
+              "description": "Relevant minimum wage regulation documents"
+            }
+          },
+          "template": {
+            "collection_name": {
+              "field_type": "str",
+              "display_name": "MongoDB Collection",
+              "value": "wage_regulations",
+              "required": true
+            },
+            "connection_string": {
+              "field_type": "str",
+              "display_name": "MongoDB Atlas URI",
+              "value": "${MONGODB_URI}",
+              "required": true,
+              "password": true
+            },
+            "embedding_model": {
+              "field_type": "str",
+              "display_name": "Embedding Model",
+              "value": "ibm/slate-125m-english-rtrvr"
+            },
+            "index_name": {
+              "field_type": "str",
+              "display_name": "Vector Index Name",
+              "value": "wage_vector_index"
+            },
+            "top_k": {
+              "field_type": "int",
+              "display_name": "Top K Results",
+              "value": 5
+            }
+          }
+        }
+      },
+      {
+        "id": "node-prompt-wage",
+        "type": "PromptTemplate",
+        "position": { "x": 440, "y": 300 },
+        "data": {
+          "label": "Wage Fairness Prompt",
+          "description": "Formats the prompt for Granite LLM combining worker wage data and retrieved wage regulations",
+          "inputs": {
+            "worker_data": {
+              "type": "str",
+              "description": "Worker wage data JSON from input node"
+            },
+            "context": {
+              "type": "str",
+              "description": "Retrieved minimum wage regulation documents"
+            }
+          },
+          "outputs": {
+            "prompt": {
+              "type": "str",
+              "description": "Formatted prompt string"
+            }
+          },
+          "template": {
+            "template": {
+              "field_type": "str",
+              "display_name": "Prompt Template",
+              "multiline": true,
+              "value": "You are a wage fairness analyst. Worker details: {worker_data}. Relevant wage regulations: {context}. Compare the worker's current wage with applicable minimum wage regulations. Provide: 1) Fairness verdict: Fair/Potentially Low/High Risk 2) Percentage difference 3) Explanation in simple language 4) Recommended action"
+            }
+          }
+        }
+      },
+      {
+        "id": "node-llm-granite-wage",
+        "type": "CustomComponent",
+        "position": { "x": 800, "y": 300 },
+        "data": {
+          "label": "IBM Granite LLM (Watsonx.ai)",
+          "description": "IBM Granite 13B Chat via Watsonx.ai for wage fairness analysis",
+          "inputs": {
+            "prompt": {
+              "type": "str",
+              "description": "Formatted prompt from PromptTemplate"
+            }
+          },
+          "outputs": {
+            "text": {
+              "type": "str",
+              "description": "LLM response with wage fairness verdict"
+            }
+          },
+          "template": {
+            "model_id": {
+              "field_type": "str",
+              "display_name": "Model ID",
+              "value": "ibm/granite-13b-chat-v2",
+              "required": true
+            },
+            "watsonx_api_key": {
+              "field_type": "str",
+              "display_name": "Watsonx API Key",
+              "value": "${WATSONX_API_KEY}",
+              "required": true,
+              "password": true
+            },
+            "watsonx_project_id": {
+              "field_type": "str",
+              "display_name": "Watsonx Project ID",
+              "value": "${WATSONX_PROJECT_ID}",
+              "required": true
+            },
+            "watsonx_url": {
+              "field_type": "str",
+              "display_name": "Watsonx URL",
+              "value": "${WATSONX_URL}"
+            },
+            "max_new_tokens": {
+              "field_type": "int",
+              "display_name": "Max New Tokens",
+              "value": 512
+            },
+            "temperature": {
+              "field_type": "float",
+              "display_name": "Temperature",
+              "value": 0.1
+            }
+          }
+        }
+      },
+      {
+        "id": "node-output-wage",
+        "type": "TextOutput",
+        "position": { "x": 1160, "y": 300 },
+        "data": {
+          "label": "Wage Analysis Output",
+          "description": "Returns the wage fairness analysis result as text",
+          "inputs": {
+            "text": {
+              "type": "str",
+              "description": "Wage fairness verdict from LLM"
+            }
+          },
+          "outputs": {}
+        }
+      }
+    ],
+    "edges": [
+      {
+        "id": "edge-input-to-prompt-wage",
+        "source": "node-input-wage-data",
+        "sourceHandle": "text",
+        "target": "node-prompt-wage",
+        "targetHandle": "worker_data"
+      },
+      {
+        "id": "edge-input-to-retriever-wage",
+        "source": "node-input-wage-data",
+        "sourceHandle": "text",
+        "target": "node-retriever-wage",
+        "targetHandle": "query"
+      },
+      {
+        "id": "edge-retriever-to-prompt-wage",
+        "source": "node-retriever-wage",
+        "sourceHandle": "documents",
+        "target": "node-prompt-wage",
+        "targetHandle": "context"
+      },
+      {
+        "id": "edge-prompt-to-llm-wage",
+        "source": "node-prompt-wage",
+        "sourceHandle": "prompt",
+        "target": "node-llm-granite-wage",
+        "targetHandle": "prompt"
+      },
+      {
+        "id": "edge-llm-to-output-wage",
+        "source": "node-llm-granite-wage",
+        "sourceHandle": "text",
+        "target": "node-output-wage",
+        "targetHandle": "text"
+      }
+    ]
+  }
+}

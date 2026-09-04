@@ -1,0 +1,50 @@
+version: '3.9'
+
+services:
+  mongodb:
+    image: mongo:7
+    container_name: migrantshield-mongo
+    restart: unless-stopped
+    ports:
+      - '27017:27017'
+    environment:
+      MONGO_INITDB_DATABASE: migrantshield
+    volumes:
+      - mongo_data:/data/db
+    healthcheck:
+      test: ['CMD', 'mongosh', '--eval', 'db.adminCommand("ping")']
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: migrantshield-backend
+    restart: unless-stopped
+    ports:
+      - '5000:5000'
+    env_file:
+      - ./backend/.env
+    environment:
+      MONGODB_URI: mongodb://mongodb:27017/migrantshield
+    depends_on:
+      mongodb:
+        condition: service_healthy
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: migrantshield-frontend
+    restart: unless-stopped
+    ports:
+      - '3000:80'
+    environment:
+      REACT_APP_API_URL: http://localhost:5000/api
+    depends_on:
+      - backend
+
+volumes:
+  mongo_data:
+    driver: local

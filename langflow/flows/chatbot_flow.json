@@ -1,0 +1,376 @@
+{
+  "id": "chatbot-flow",
+  "name": "Worker AI Chatbot",
+  "description": "Conversational AI assistant for migrant workers that answers questions about welfare schemes, wages, complaints, and job information using official government documents via MongoDB Atlas Vector Search and IBM Granite via Watsonx.ai.",
+  "data": {
+    "nodes": [
+      {
+        "id": "node-input-user-message",
+        "type": "TextInput",
+        "position": { "x": 80, "y": 160 },
+        "data": {
+          "label": "User Message Input",
+          "description": "The worker's question or message",
+          "inputs": {},
+          "outputs": {
+            "text": {
+              "type": "str",
+              "description": "User message text"
+            }
+          },
+          "template": {
+            "input_value": {
+              "field_type": "str",
+              "display_name": "User Message",
+              "multiline": true,
+              "required": true,
+              "placeholder": "What welfare schemes am I eligible for as a construction worker in Maharashtra?"
+            }
+          }
+        }
+      },
+      {
+        "id": "node-input-worker-context",
+        "type": "TextInput",
+        "position": { "x": 80, "y": 360 },
+        "data": {
+          "label": "Worker Context Input (Optional)",
+          "description": "Optional JSON with worker profile context to personalize responses",
+          "inputs": {},
+          "outputs": {
+            "text": {
+              "type": "str",
+              "description": "Worker context JSON string (optional)"
+            }
+          },
+          "template": {
+            "input_value": {
+              "field_type": "str",
+              "display_name": "Worker Context JSON",
+              "multiline": true,
+              "required": false,
+              "placeholder": "{\"occupation\": \"construction\", \"state\": \"Maharashtra\", \"monthly_income\": 8000}"
+            }
+          }
+        }
+      },
+      {
+        "id": "node-intent-detector-prompt",
+        "type": "PromptTemplate",
+        "position": { "x": 440, "y": 160 },
+        "data": {
+          "label": "Intent Detection Prompt",
+          "description": "Detects the category/intent of the worker's question before retrieval",
+          "inputs": {
+            "user_message": {
+              "type": "str",
+              "description": "User's question"
+            }
+          },
+          "outputs": {
+            "prompt": {
+              "type": "str",
+              "description": "Intent detection prompt"
+            }
+          },
+          "template": {
+            "template": {
+              "field_type": "str",
+              "display_name": "Intent Detection Template",
+              "multiline": true,
+              "value": "Classify the intent of this worker query into exactly one category. Query: {user_message}. Categories: scheme_info (questions about welfare schemes, benefits, entitlements), wage_info (questions about minimum wage, salary, payment), complaint_help (filing complaints, reporting violations), job_info (job opportunities, skills, employment), profile_help (registration, documents, ID), general (other questions). Respond with only the category name, nothing else."
+            }
+          }
+        }
+      },
+      {
+        "id": "node-llm-intent",
+        "type": "CustomComponent",
+        "position": { "x": 800, "y": 160 },
+        "data": {
+          "label": "IBM Granite — Intent Classifier",
+          "description": "Classifies user intent using IBM Granite 13B Chat",
+          "inputs": {
+            "prompt": {
+              "type": "str",
+              "description": "Intent detection prompt"
+            }
+          },
+          "outputs": {
+            "text": {
+              "type": "str",
+              "description": "Detected intent category string"
+            }
+          },
+          "template": {
+            "model_id": {
+              "field_type": "str",
+              "display_name": "Model ID",
+              "value": "ibm/granite-13b-chat-v2",
+              "required": true
+            },
+            "watsonx_api_key": {
+              "field_type": "str",
+              "display_name": "Watsonx API Key",
+              "value": "${WATSONX_API_KEY}",
+              "required": true,
+              "password": true
+            },
+            "watsonx_project_id": {
+              "field_type": "str",
+              "display_name": "Watsonx Project ID",
+              "value": "${WATSONX_PROJECT_ID}",
+              "required": true
+            },
+            "watsonx_url": {
+              "field_type": "str",
+              "display_name": "Watsonx URL",
+              "value": "${WATSONX_URL}"
+            },
+            "max_new_tokens": {
+              "field_type": "int",
+              "display_name": "Max New Tokens",
+              "value": 32
+            },
+            "temperature": {
+              "field_type": "float",
+              "display_name": "Temperature",
+              "value": 0.0
+            }
+          }
+        }
+      },
+      {
+        "id": "node-retriever-chatbot",
+        "type": "VectorStoreRetriever",
+        "position": { "x": 800, "y": 400 },
+        "data": {
+          "label": "Government Documents Retriever",
+          "description": "Retrieves relevant official government documents from MongoDB Atlas Vector Search",
+          "inputs": {
+            "query": {
+              "type": "str",
+              "description": "User message used as search query"
+            }
+          },
+          "outputs": {
+            "documents": {
+              "type": "list",
+              "description": "Retrieved official document chunks with metadata (source, title, url)"
+            }
+          },
+          "template": {
+            "collection_name": {
+              "field_type": "str",
+              "display_name": "MongoDB Collection",
+              "value": "government_documents",
+              "required": true
+            },
+            "connection_string": {
+              "field_type": "str",
+              "display_name": "MongoDB Atlas URI",
+              "value": "${MONGODB_URI}",
+              "required": true,
+              "password": true
+            },
+            "embedding_model": {
+              "field_type": "str",
+              "display_name": "Embedding Model",
+              "value": "ibm/slate-125m-english-rtrvr"
+            },
+            "index_name": {
+              "field_type": "str",
+              "display_name": "Vector Index Name",
+              "value": "documents_vector_index"
+            },
+            "top_k": {
+              "field_type": "int",
+              "display_name": "Top K Results",
+              "value": 4
+            },
+            "return_source_documents": {
+              "field_type": "bool",
+              "display_name": "Return Source Metadata",
+              "value": true
+            }
+          }
+        }
+      },
+      {
+        "id": "node-main-prompt-chatbot",
+        "type": "PromptTemplate",
+        "position": { "x": 1160, "y": 280 },
+        "data": {
+          "label": "Main Chatbot Prompt",
+          "description": "Formats the final answer prompt combining retrieved documents, worker context, and user question",
+          "inputs": {
+            "worker_context": {
+              "type": "str",
+              "description": "Optional worker context JSON"
+            },
+            "context": {
+              "type": "str",
+              "description": "Retrieved official document chunks"
+            },
+            "question": {
+              "type": "str",
+              "description": "Worker's original question"
+            }
+          },
+          "outputs": {
+            "prompt": {
+              "type": "str",
+              "description": "Formatted chatbot answer prompt"
+            }
+          },
+          "template": {
+            "template": {
+              "field_type": "str",
+              "display_name": "Main Chatbot Template",
+              "multiline": true,
+              "value": "You are MigrantShield Assistant, a helpful AI for migrant workers in India. You ONLY provide information based on the retrieved official documents. If you don't find relevant information, say 'I don't have verified information about this. Please contact your nearest labor office.' Worker context (if available): {worker_context}. Retrieved official information: {context}. Worker question: {question}. Provide a helpful, accurate answer in simple language. If the question is in Hindi or regional language, respond in that language."
+            }
+          }
+        }
+      },
+      {
+        "id": "node-llm-granite-chatbot",
+        "type": "CustomComponent",
+        "position": { "x": 1520, "y": 280 },
+        "data": {
+          "label": "IBM Granite LLM — Answer Generator",
+          "description": "IBM Granite 13B Chat generates the final answer grounded in retrieved official documents",
+          "inputs": {
+            "prompt": {
+              "type": "str",
+              "description": "Formatted chatbot prompt"
+            }
+          },
+          "outputs": {
+            "text": {
+              "type": "str",
+              "description": "Generated answer text"
+            }
+          },
+          "template": {
+            "model_id": {
+              "field_type": "str",
+              "display_name": "Model ID",
+              "value": "ibm/granite-13b-chat-v2",
+              "required": true
+            },
+            "watsonx_api_key": {
+              "field_type": "str",
+              "display_name": "Watsonx API Key",
+              "value": "${WATSONX_API_KEY}",
+              "required": true,
+              "password": true
+            },
+            "watsonx_project_id": {
+              "field_type": "str",
+              "display_name": "Watsonx Project ID",
+              "value": "${WATSONX_PROJECT_ID}",
+              "required": true
+            },
+            "watsonx_url": {
+              "field_type": "str",
+              "display_name": "Watsonx URL",
+              "value": "${WATSONX_URL}"
+            },
+            "max_new_tokens": {
+              "field_type": "int",
+              "display_name": "Max New Tokens",
+              "value": 768
+            },
+            "temperature": {
+              "field_type": "float",
+              "display_name": "Temperature",
+              "value": 0.3
+            }
+          }
+        }
+      },
+      {
+        "id": "node-output-chatbot",
+        "type": "TextOutput",
+        "position": { "x": 1880, "y": 280 },
+        "data": {
+          "label": "Chatbot Response Output",
+          "description": "Returns the chatbot answer with source citations",
+          "inputs": {
+            "text": {
+              "type": "str",
+              "description": "Generated answer with sources from LLM"
+            }
+          },
+          "outputs": {},
+          "template": {
+            "include_sources": {
+              "field_type": "bool",
+              "display_name": "Include Source Citations",
+              "value": true
+            }
+          }
+        }
+      }
+    ],
+    "edges": [
+      {
+        "id": "edge-message-to-intent-prompt",
+        "source": "node-input-user-message",
+        "sourceHandle": "text",
+        "target": "node-intent-detector-prompt",
+        "targetHandle": "user_message"
+      },
+      {
+        "id": "edge-intent-prompt-to-llm",
+        "source": "node-intent-detector-prompt",
+        "sourceHandle": "prompt",
+        "target": "node-llm-intent",
+        "targetHandle": "prompt"
+      },
+      {
+        "id": "edge-message-to-retriever",
+        "source": "node-input-user-message",
+        "sourceHandle": "text",
+        "target": "node-retriever-chatbot",
+        "targetHandle": "query"
+      },
+      {
+        "id": "edge-worker-context-to-main-prompt",
+        "source": "node-input-worker-context",
+        "sourceHandle": "text",
+        "target": "node-main-prompt-chatbot",
+        "targetHandle": "worker_context"
+      },
+      {
+        "id": "edge-retriever-to-main-prompt",
+        "source": "node-retriever-chatbot",
+        "sourceHandle": "documents",
+        "target": "node-main-prompt-chatbot",
+        "targetHandle": "context"
+      },
+      {
+        "id": "edge-message-to-main-prompt",
+        "source": "node-input-user-message",
+        "sourceHandle": "text",
+        "target": "node-main-prompt-chatbot",
+        "targetHandle": "question"
+      },
+      {
+        "id": "edge-main-prompt-to-llm",
+        "source": "node-main-prompt-chatbot",
+        "sourceHandle": "prompt",
+        "target": "node-llm-granite-chatbot",
+        "targetHandle": "prompt"
+      },
+      {
+        "id": "edge-llm-to-output-chatbot",
+        "source": "node-llm-granite-chatbot",
+        "sourceHandle": "text",
+        "target": "node-output-chatbot",
+        "targetHandle": "text"
+      }
+    ]
+  }
+}

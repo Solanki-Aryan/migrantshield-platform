@@ -1,0 +1,165 @@
+{
+  "id": "grievance-agent-flow",
+  "name": "Grievance Classification Agent",
+  "description": "Classifies and extracts structured information from migrant worker labor complaints using IBM Granite via Watsonx.ai. No RAG retrieval — relies on Granite's classification capability.",
+  "data": {
+    "nodes": [
+      {
+        "id": "node-input-complaint",
+        "type": "TextInput",
+        "position": { "x": 80, "y": 280 },
+        "data": {
+          "label": "Complaint Description Input",
+          "description": "Free-text complaint description from the worker",
+          "inputs": {},
+          "outputs": {
+            "text": {
+              "type": "str",
+              "description": "Complaint text"
+            }
+          },
+          "template": {
+            "input_value": {
+              "field_type": "str",
+              "display_name": "Complaint Text",
+              "multiline": true,
+              "required": true,
+              "placeholder": "My employer has not paid my salary for the last two months and threatened to deduct more for accommodation charges."
+            }
+          }
+        }
+      },
+      {
+        "id": "node-prompt-grievance",
+        "type": "PromptTemplate",
+        "position": { "x": 440, "y": 280 },
+        "data": {
+          "label": "Grievance Classification Prompt",
+          "description": "Formats the complaint classification prompt for Granite LLM",
+          "inputs": {
+            "complaint": {
+              "type": "str",
+              "description": "Complaint text from input node"
+            }
+          },
+          "outputs": {
+            "prompt": {
+              "type": "str",
+              "description": "Formatted classification prompt"
+            }
+          },
+          "template": {
+            "template": {
+              "field_type": "str",
+              "display_name": "Prompt Template",
+              "multiline": true,
+              "value": "You are a labor complaint classifier. Analyze this complaint: {complaint}. Extract and return JSON with: category (wage_dispute/unsafe_workplace/harassment/excessive_hours/no_safety_equipment/workplace_injury/forced_labor/accommodation/other), severity (low/medium/high/emergency), intent (what the worker wants), key_entities (employer, location, issue), recommended_authority (which department should handle this), immediate_action_required (true/false)"
+            }
+          }
+        }
+      },
+      {
+        "id": "node-llm-granite-grievance",
+        "type": "CustomComponent",
+        "position": { "x": 800, "y": 280 },
+        "data": {
+          "label": "IBM Granite LLM (Watsonx.ai)",
+          "description": "IBM Granite 13B Chat via Watsonx.ai for complaint classification",
+          "inputs": {
+            "prompt": {
+              "type": "str",
+              "description": "Formatted classification prompt from PromptTemplate"
+            }
+          },
+          "outputs": {
+            "text": {
+              "type": "str",
+              "description": "LLM response with structured classification JSON"
+            }
+          },
+          "template": {
+            "model_id": {
+              "field_type": "str",
+              "display_name": "Model ID",
+              "value": "ibm/granite-13b-chat-v2",
+              "required": true
+            },
+            "watsonx_api_key": {
+              "field_type": "str",
+              "display_name": "Watsonx API Key",
+              "value": "${WATSONX_API_KEY}",
+              "required": true,
+              "password": true
+            },
+            "watsonx_project_id": {
+              "field_type": "str",
+              "display_name": "Watsonx Project ID",
+              "value": "${WATSONX_PROJECT_ID}",
+              "required": true
+            },
+            "watsonx_url": {
+              "field_type": "str",
+              "display_name": "Watsonx URL",
+              "value": "${WATSONX_URL}"
+            },
+            "max_new_tokens": {
+              "field_type": "int",
+              "display_name": "Max New Tokens",
+              "value": 512
+            },
+            "temperature": {
+              "field_type": "float",
+              "display_name": "Temperature",
+              "value": 0.0
+            },
+            "system_prompt": {
+              "field_type": "str",
+              "display_name": "System Prompt",
+              "multiline": true,
+              "value": "You are a precise labor complaint classification system. Always respond with valid JSON only. Do not include any prose, markdown code fences, or explanation outside the JSON object."
+            }
+          }
+        }
+      },
+      {
+        "id": "node-output-grievance",
+        "type": "TextOutput",
+        "position": { "x": 1160, "y": 280 },
+        "data": {
+          "label": "Classification Result Output",
+          "description": "Returns structured JSON classification of the complaint",
+          "inputs": {
+            "text": {
+              "type": "str",
+              "description": "Structured classification JSON from LLM"
+            }
+          },
+          "outputs": {}
+        }
+      }
+    ],
+    "edges": [
+      {
+        "id": "edge-input-to-prompt-grievance",
+        "source": "node-input-complaint",
+        "sourceHandle": "text",
+        "target": "node-prompt-grievance",
+        "targetHandle": "complaint"
+      },
+      {
+        "id": "edge-prompt-to-llm-grievance",
+        "source": "node-prompt-grievance",
+        "sourceHandle": "prompt",
+        "target": "node-llm-granite-grievance",
+        "targetHandle": "prompt"
+      },
+      {
+        "id": "edge-llm-to-output-grievance",
+        "source": "node-llm-granite-grievance",
+        "sourceHandle": "text",
+        "target": "node-output-grievance",
+        "targetHandle": "text"
+      }
+    ]
+  }
+}
